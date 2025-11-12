@@ -52,3 +52,5 @@ $$
 Bu, ortalama arıza süresinin güvenilirlik fonksiyonunun altında kalan alan olduğunu gösterir.
 
 ---
+
+
