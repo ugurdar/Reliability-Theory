@@ -23,7 +23,7 @@ inverse_transform <- function(u) {
 }
 
 # Sample
-n_sample <- 50
+n_sample <- 100
 u_vals <- runif(n_sample)
 sample_data <- inverse_transform(u_vals)
 sample_data <- sample_data[is.finite(sample_data) & sample_data >= 0]
@@ -37,7 +37,7 @@ s_mean <- mean(sample_data)
 s_var  <- var(sample_data)
 s_sd   <- sd(sample_data)
 s_med  <- median(sample_data)
-
+s_min <- min(sample_data)
 # Theoretical (finite ones only)
 theoretical_mttf <- calculate_mttf()
 theoretical_med  <- find_median()
@@ -46,11 +46,12 @@ theoretical_sd   <- calculate_std_dev()    # Inf
 
 # Comparison table via base R
 cmp <- data.frame(
-  Metric = c("MTTF", "Median", "Variance", "Std_Dev"),
-  Theoretical = c(theoretical_mttf, theoretical_med, theoretical_var, theoretical_sd),
-  Sample = c(s_mean, s_med, s_var, s_sd),
+  Metric = c("MTTF", "Median", "Variance", "Std_Dev","min"),
+  Theoretical = c(theoretical_mttf, theoretical_med, theoretical_var, theoretical_sd,0),
+  Sample = c(s_mean, s_med, s_var, s_sd,s_min),
   stringsAsFactors = FALSE
 )
+print(cmp)
 cmp$Absolute_Error <- ifelse(is.finite(cmp$Theoretical), abs(cmp$Sample - cmp$Theoretical), NA_real_)
 cmp$Relative_Error_Pct <- ifelse(is.finite(cmp$Theoretical) & cmp$Theoretical != 0,
                                  100 * cmp$Absolute_Error / abs(cmp$Theoretical), NA_real_)
