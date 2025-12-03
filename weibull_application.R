@@ -106,58 +106,79 @@ weibull_3p_mle <- function(x, start_shape = 1, start_scale = NULL, start_locatio
 }
 
 # 3-parameter Weibull Method of Moments
-weibull_3p_mom <- function(x) {
-  x <- x[x > 0]
 
-  m1 <- mean(x)
-  m2 <- mean(x^2)
-  m3 <- mean(x^3)
-
-  # Central moments
-  mu2 <- m2 - m1^2
-  mu3 <- m3 - 3 * m1 * m2 + 2 * m1^3
-
-  # Skewness coefficient
-  skewness <- mu3 / (mu2^(3/2))
-
-  # Estimate shape parameter from skewness
-  skewness_theoretical <- function(shape) {
-    g1 <- gamma(1 + 1 / shape)
-    g2 <- gamma(1 + 2 / shape)
-    g3 <- gamma(1 + 3 / shape)
-
-    numerator <- g3 - 3 * g1 * g2 + 2 * g1^3
-    denominator <- (g2 - g1^2)^(3/2)
-
-    numerator / denominator
-  }
-
-  objective <- function(shape) {
-    if (shape <= 0) return(Inf)
-    (skewness_theoretical(shape) - skewness)^2
-  }
-
-  opt <- optimize(objective, interval = c(0.1, 10))
-  shape_hat <- opt$minimum
-
-  # Estimate scale and location parameters
-  g1 <- gamma(1 + 1 / shape_hat)
-  g2 <- gamma(1 + 2 / shape_hat)
-
-  # Scale from variance equation
-  scale_hat <- sqrt(mu2 / (g2 - g1^2))
-
-  # Location from mean equation
-  location_hat <- m1 - scale_hat * g1
-
-  list(
-    shape_mom = shape_hat,
-    scale_mom = scale_hat,
-    location_mom = location_hat,
-    mean_sample = m1,
-    var_sample = mu2,
-    skewness_sample = skewness
+weibull3_raw_moment_k <- function(k, par) {
+  theta <- par[1]
+  beta  <- par[2]
+  gam1  <- par[3]
+  
+  # k. raw moment (0 etrafında):
+  # mu_k' = sum_{j=0}^k C(k,j) * gamma^(k-j) * theta^j * Gamma(1 + j/beta)
+  j_vals <- 0:k
+  
+  mu_k <- sum(
+    choose(k, j_vals) *
+      gam1^(k - j_vals) *
+      theta^j_vals *
+      gamma(1 + j_vals / beta)
   )
+  
+  return(mu_k)
+}
+
+## Vektör denklem g(par) = 0
+## x_data : veri vektörü
+## par    : c(theta, beta, gamma)
+
+weibull3_mom_equations <- function(par, x_data) {
+  # Örnek raw momentler (0 etrafında)
+  m1 <- mean(x_data^1)
+  m2 <- mean(x_data^2)
+  m3 <- mean(x_data^3)
+  
+  # Teorik raw momentler
+  mu1 <- weibull3_raw_moment_k(1, par)
+  mu2 <- weibull3_raw_moment_k(2, par)
+  mu3 <- weibull3_raw_moment_k(3, par)
+  
+  # g(par) = (mu1 - m1, mu2 - m2, mu3 - m3)
+  g1 <- mu1 - m1
+  g2 <- mu2 - m2
+  g3 <- mu3 - m3
+  
+  return(c(g1, g2, g3))
+}
+
+## MOM tahminini bulan fonksiyon
+## start: başlangıç değerleri (theta, beta, gamma)
+
+weibull3_mom_estimate <- function(x_data,
+                                  start = c(theta = 1.5,
+                                            beta  = 1,
+                                            gamma = min(x_data) - 0.1 * sd(x_data))) {
+  if (!requireNamespace("nleqslv", quietly = TRUE)) {
+    stop("Lütfen önce install.packages('nleqslv') ile 'nleqslv' paketini kur.")
+  }
+  
+  root <- nleqslv::nleqslv(
+    x   = start,                   # başlangıç parametreleri (theta, beta, gamma)
+    fn  = weibull3_mom_equations,  # g(par)
+    x_data = x_data                # ek argüman olarak veri
+  )
+
+  root2 <- root
+
+  root2$x[1] <-   root$x[2] 
+  root2$x[2] <-   root$x[1] 
+  
+  # Sonuçları döndür
+  out <- list(
+    par     = setNames(root2$x, c("beta", "theta", "gamma")),
+    conv    = root2$termcd,
+    message = root2$message
+  )
+  
+  return(out)
 }
 
 library(nleqslv)
@@ -301,16 +322,16 @@ if (!is.na(yont_mle$shape_mle)) {
 # MOM estimation for comparison
 cat("Estimating parameters using MOM method...\n")
 yont_mom <- tryCatch({
-  weibull_3p_mom(dataset1)
+  weibull3_mom_estimate(dataset1)
 }, error = function(e) {
   list(scale_mom = NA, shape_mom = NA, location_mom = NA, message = e$message)
 })
-
-if (!is.na(yont_mom$shape_mom)) {
+a <- yont_mom
+if (!is.na(a$par[1])) {
   cat("MOM Method - SUCCESS\n")
-  cat("  theta (scale):", yont_mom$scale_mom, "\n")
-  cat("  beta (shape):", yont_mom$shape_mom, "\n")
-  cat("  mu (location):", yont_mom$location_mom, "\n\n")
+  cat("  theta (shape):", a$par[2], "\n")
+  cat("  beta (scale):", a$par[1], "\n")
+  cat("  mu (location):",a$par[3], "\n\n")
 } else {
   cat("MOM Method - FAILED\n\n")
 }
